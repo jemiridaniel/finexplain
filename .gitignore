@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+*.pkl
+
+# Node
+node_modules/
+build/
+.env.local
+
+# Data (too large for GitHub)
+data/PS_20174392719_1491204439457_log.csv
+
+# OS
+.DS_Store
+Thumbs.db
