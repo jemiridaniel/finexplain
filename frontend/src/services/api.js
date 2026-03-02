@@ -1,6 +1,12 @@
 import axios from "axios";
 
-const API = axios.create({ baseURL: "http://localhost:8000/api/v1" });
+// In production (HF Spaces), API is served from same origin
+// In development, proxy to localhost:8000
+const baseURL = process.env.NODE_ENV === "production"
+  ? "/api/v1"
+  : "http://localhost:8000/api/v1";
+
+const API = axios.create({ baseURL });
 
 export const analyzeTransaction = (data) => API.post("/analyze", data);
 export const analyzeBulk = (file) => {
