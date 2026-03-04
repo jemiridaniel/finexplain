@@ -42,6 +42,7 @@ class AnalysisResult(BaseModel):
     shap_values: List[SHAPFeature]
     explanation: Optional[str] = None
     llm_provider: Optional[str] = None
+    balance_violations: List[str] = []
 
 
 class BulkAnalysisResult(BaseModel):

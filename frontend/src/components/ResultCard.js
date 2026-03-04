@@ -17,6 +17,26 @@ export default function ResultCard({ result }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Balance integrity violations */}
+      {result.balance_violations && result.balance_violations.length > 0 && (
+        <div style={{
+          background: "#FEF2F2", border: "2px solid #DC2626",
+          borderRadius: 14, padding: "16px 20px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 18 }}>🚫</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#DC2626" }}>
+              Balance Integrity Violation Detected
+            </span>
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            {result.balance_violations.map((v, i) => (
+              <li key={i} style={{ fontSize: 13, color: "#7F1D1D", lineHeight: 1.6 }}>{v}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Risk banner */}
       <div style={{
         background: cfg.bg, border: `1px solid ${cfg.border}`,

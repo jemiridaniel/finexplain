@@ -9,6 +9,7 @@ from app.models.detector import AnomalyDetector
 from app.services.explainer import SHAPExplainer
 from app.services.llm_service import LLMService
 from app.services.account_analyzer import compute_behavioral_profile, score_behavioral_risk
+from app.services.balance_validator import validate_balance_integrity
 
 router = APIRouter()
 detector = AnomalyDetector()
@@ -34,16 +35,22 @@ async def analyze_account_history(request: AccountHistoryRequest):
         results: list[AccountTransactionResult] = []
 
         for txn in request.transactions:
+            violations = validate_balance_integrity(txn)
             score, is_model_anomaly = detector.predict(txn)
             shap_values = explainer.explain(txn)
             behavioral_risk, behavioral_flags = score_behavioral_risk(txn, profile)
 
-            is_anomaly = is_model_anomaly or behavioral_risk > 0.4
+            if violations:
+                is_anomaly = True
+                risk = "HIGH"
+            else:
+                is_anomaly = is_model_anomaly or behavioral_risk > 0.4
+                risk = _risk_level(score)
 
             explanation = None
             llm_provider = None
             if is_anomaly:
-                exp = await llm_service.explain(txn, score, shap_values, is_anomaly)
+                exp = await llm_service.explain(txn, score, shap_values, is_anomaly, violations)
                 explanation = exp.text
                 llm_provider = exp.provider
 
@@ -51,10 +58,11 @@ async def analyze_account_history(request: AccountHistoryRequest):
                 transaction=txn,
                 anomaly_score=score,
                 is_anomaly=is_anomaly,
-                risk_level=_risk_level(score),
+                risk_level=risk,
                 shap_values=shap_values,
                 explanation=explanation,
                 llm_provider=llm_provider,
+                balance_violations=violations,
                 behavioral_risk=round(behavioral_risk, 4),
                 behavioral_flags=behavioral_flags,
                 behavioral_anomaly=behavioral_risk > 0.4,

@@ -19,7 +19,8 @@ def _build_prompt(
     transaction: TransactionInput,
     score: float,
     shap_values: List[SHAPFeature],
-    is_anomaly: bool
+    is_anomaly: bool,
+    violations: Optional[List[str]] = None,
 ) -> str:
     top_factors = shap_values[:4]
     factors_text = "\n".join([
@@ -28,6 +29,17 @@ def _build_prompt(
     ])
 
     risk = "HIGH" if score < -0.3 else "MEDIUM" if score < -0.1 else "LOW"
+
+    violation_section = ""
+    if violations:
+        violation_lines = "\n".join(f"  - {v}" for v in violations)
+        violation_section = f"""
+CRITICAL — Balance integrity violations detected (rule-based, not ML):
+{violation_lines}
+
+These violations mean the numbers in this transaction do not add up correctly. \
+Explain what the discrepancy means in plain English and why it is suspicious. \
+Lead with this finding."""
 
     return f"""You are a financial fraud analyst AI. Explain the following transaction analysis result to a non-technical user in 3-4 clear, specific sentences.
 
@@ -38,7 +50,7 @@ Transaction details:
 - Sender closing balance: ${transaction.newbalanceOrig:,.2f}
 - Recipient opening balance: ${transaction.oldbalanceDest:,.2f}
 - Recipient closing balance: ${transaction.newbalanceDest:,.2f}
-
+{violation_section}
 Anomaly score: {score:.4f} (lower = more suspicious)
 Risk level: {risk}
 Flagged as anomaly: {is_anomaly}
@@ -60,9 +72,10 @@ class LLMService:
         transaction: TransactionInput,
         score: float,
         shap_values: List[SHAPFeature],
-        is_anomaly: bool
+        is_anomaly: bool,
+        violations: Optional[List[str]] = None,
     ) -> ExplanationResult:
-        prompt = _build_prompt(transaction, score, shap_values, is_anomaly)
+        prompt = _build_prompt(transaction, score, shap_values, is_anomaly, violations)
 
         # Try each provider in order — fail gracefully to next
         providers = [

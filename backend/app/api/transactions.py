@@ -9,6 +9,7 @@ from app.models.detector import AnomalyDetector
 from app.services.explainer import SHAPExplainer
 from app.services.llm_service import LLMService
 from app.services.report import ReportGenerator
+from app.services.balance_validator import validate_balance_integrity
 
 router = APIRouter()
 detector = AnomalyDetector()
@@ -21,18 +22,29 @@ report_gen = ReportGenerator()
 async def analyze_transaction(transaction: TransactionInput):
     """Analyze a single transaction and return anomaly score + explanation."""
     try:
+        # 0. Balance integrity check — runs before ML model
+        violations = validate_balance_integrity(transaction)
+
         # 1. Score transaction
         score, is_anomaly = detector.predict(transaction)
+
+        # Override: balance violations always escalate to HIGH RISK
+        if violations:
+            is_anomaly = True
+            risk = "HIGH"
+        else:
+            risk = _risk_level(score)
 
         # 2. Get SHAP explanation
         shap_values = explainer.explain(transaction)
 
-        # 3. Generate LLM explanation
+        # 3. Generate LLM explanation (violations injected into prompt)
         explanation = await llm_service.explain(
             transaction=transaction,
             score=score,
             shap_values=shap_values,
-            is_anomaly=is_anomaly
+            is_anomaly=is_anomaly,
+            violations=violations,
         )
 
         return AnalysisResult(
@@ -42,7 +54,8 @@ async def analyze_transaction(transaction: TransactionInput):
             shap_values=shap_values,
             explanation=explanation.text,
             llm_provider=explanation.provider,
-            risk_level=_risk_level(score)
+            risk_level=risk,
+            balance_violations=violations,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -69,23 +82,30 @@ async def analyze_bulk(file: UploadFile = File(...)):
         )
 
     results = []
-    for _, row in df.head(50).iterrows():  # cap at 50 rows for demo
+    for _, row in df.head(50).iterrows():
         txn = TransactionInput(**row.to_dict())
+        violations = validate_balance_integrity(txn)
         score, is_anomaly = detector.predict(txn)
-        shap_values = explainer.explain(txn)
+
+        if violations:
+            is_anomaly = True
+            risk = "HIGH"
+        else:
+            risk = _risk_level(score)
 
         explanation = None
         if is_anomaly:
-            exp = await llm_service.explain(txn, score, shap_values, is_anomaly)
+            exp = await llm_service.explain(txn, score, explainer.explain(txn), is_anomaly, violations)
             explanation = exp.text
 
         results.append(AnalysisResult(
             transaction=txn,
             anomaly_score=score,
             is_anomaly=is_anomaly,
-            shap_values=shap_values,
+            shap_values=explainer.explain(txn),
             explanation=explanation,
-            risk_level=_risk_level(score)
+            risk_level=risk,
+            balance_violations=violations,
         ))
 
     flagged = [r for r in results if r.is_anomaly]
