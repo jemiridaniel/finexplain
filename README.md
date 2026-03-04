@@ -31,12 +31,24 @@ short_description: Explainable AI fraud detection — GBM + SHAP + LLM
 
 ## 🎯 What It Does
 
-Upload a CSV of financial transactions or enter one manually. FinExplain will:
+FinExplain offers three analysis modes:
 
-1. **Score** each transaction using a Gradient Boosting classifier trained on 200,000 real PaySim transactions
-2. **Explain** which features drove the decision using SHAP values (visualized as a bar chart)
-3. **Narrate** the finding in plain English using an LLM — so non-technical stakeholders can act on it
-4. **Report** — download a full PDF of flagged transactions with AI explanations included
+### 1. Single Transaction
+Enter one transaction manually. Get an instant fraud probability, SHAP breakdown, and plain-English explanation.
+
+### 2. Bulk CSV Upload
+Upload a CSV of up to 50 transactions. Every row is scored and flagged transactions are listed with individual explanations and a downloadable PDF report.
+
+### 3. Account History Analysis *(new)*
+Upload 2 weeks of transactions for one account. FinExplain builds a **personal behavioral baseline** for that account and flags transactions that are anomalous relative to *that user's own patterns* — not just global thresholds.
+
+> A $500 cash withdrawal may be normal globally but suspicious for an account that has never done one. Account History catches this. Single Transaction analysis cannot.
+
+For each flagged transaction you see:
+- Whether it was flagged by the **global model**, the **behavioral baseline**, or both
+- The specific behavioral signals (e.g. *"Amount is 12x std deviations above this account's average"*)
+- A **balance timeline chart** showing the 14-day trajectory with anomalies highlighted
+- An **account-level LLM risk narrative** summarizing the overall risk picture
 
 ---
 
@@ -51,25 +63,29 @@ Upload a CSV of financial transactions or enter one manually. FinExplain will:
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   React Frontend                     │
-│         Single Transaction │ Bulk CSV Upload         │
-└──────────────────┬──────────────────────────────────┘
-                   │ HTTP
-┌──────────────────▼──────────────────────────────────┐
-│                  FastAPI Backend                     │
-│                                                      │
-│  ┌─────────────────┐    ┌──────────────────────┐    │
-│  │ Gradient        │    │   SHAP Explainer      │    │
-│  │ Boosting        │───▶│   (feature impact)    │    │
-│  │ Classifier      │    └──────────┬───────────┘    │
-│  │ (PaySim 200K)   │               │                 │
-│  └─────────────────┘    ┌──────────▼───────────┐    │
-│                          │   LLM Service        │    │
-│                          │   Groq → Claude      │    │
-│                          │   → OpenAI fallback  │    │
-│                          └──────────────────────┘    │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      React Frontend                           │
+│   Single Transaction │ Bulk CSV Upload │ Account History      │
+└────────────────────────────┬─────────────────────────────────┘
+                             │ HTTP
+┌────────────────────────────▼─────────────────────────────────┐
+│                      FastAPI Backend                          │
+│                                                               │
+│  ┌──────────────────┐   ┌──────────────────────────────────┐  │
+│  │ Gradient         │   │  Behavioral Analyzer              │  │
+│  │ Boosting         │   │  (account baseline: mean/std,     │  │
+│  │ Classifier       │   │   typical types, z-score flags)   │  │
+│  │ (PaySim 200K)    │   └──────────────┬───────────────────┘  │
+│  └────────┬─────────┘                  │                      │
+│           │                ┌───────────▼───────────┐          │
+│           └───────────────▶│   SHAP Explainer       │          │
+│                            └───────────┬───────────┘          │
+│                            ┌───────────▼───────────┐          │
+│                            │   LLM Service          │          │
+│                            │   Groq → Claude        │          │
+│                            │   → OpenAI → fallback  │          │
+│                            └───────────────────────┘          │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -79,6 +95,7 @@ Upload a CSV of financial transactions or enter one manually. FinExplain will:
 - 🎯 **100% accuracy** on PaySim test set (precision/recall both 1.00)
 - 🔬 **SHAP explainability** — see exactly which transaction features triggered the flag
 - 🤖 **Multi-LLM fallback chain** — Groq → Anthropic Claude → OpenAI, never fails silently
+- 👤 **Account History Analysis** — behavioral baseline over a 2-week window catches fraud invisible to per-transaction models
 - 📊 **Bulk analysis** — upload a CSV, get all transactions scored at once
 - 📄 **PDF reports** — downloadable audit trail with AI explanations
 - 🌍 **Deployed publicly** on Hugging Face Spaces — no setup required
@@ -151,15 +168,27 @@ The combination of a supervised classifier + SHAP feature attribution + LLM narr
 finexplain/
 ├── backend/
 │   ├── app/
-│   │   ├── api/            # FastAPI route handlers
-│   │   ├── core/           # Config and settings
-│   │   ├── models/         # ML model + Pydantic schemas
-│   │   └── services/       # LLM, SHAP, PDF report
+│   │   ├── api/
+│   │   │   ├── transactions.py   # Single + bulk analysis routes
+│   │   │   ├── account.py        # Account history route
+│   │   │   └── health.py
+│   │   ├── core/                 # Config and settings
+│   │   ├── models/               # ML model + Pydantic schemas
+│   │   └── services/
+│   │       ├── llm_service.py    # Multi-LLM fallback chain
+│   │       ├── explainer.py      # SHAP TreeExplainer
+│   │       ├── account_analyzer.py  # Behavioral baseline profiling
+│   │       └── report.py         # PDF generation
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
-│       ├── components/     # React UI components
-│       └── services/       # API client
+│       ├── components/
+│       │   ├── TransactionForm.js
+│       │   ├── BulkUpload.js
+│       │   ├── AccountHistory.js    # 2-week history upload + demo
+│       │   ├── AccountResults.js    # Timeline + behavioral flags
+│       │   └── ResultCard.js
+│       └── services/api.js
 ├── data/
 │   └── sample_transactions.csv
 ├── Dockerfile
@@ -170,8 +199,13 @@ finexplain/
 
 ## 🛣️ Roadmap
 
+- [x] Single transaction analysis with SHAP + LLM explanation
+- [x] Bulk CSV upload and scoring
+- [x] Account history analysis — behavioral baseline over 2-week window
+- [x] PDF report generation
+- [x] Deployed on Hugging Face Spaces
 - [ ] Real-time transaction streaming via WebSocket
-- [ ] User authentication + transaction history
+- [ ] User authentication + persistent transaction history
 - [ ] Fine-tuned explanation model
 - [ ] Multi-language explanations (Yoruba, Igbo, Hausa)
 - [ ] Network anomaly detection module
