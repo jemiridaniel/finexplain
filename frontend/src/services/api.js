@@ -18,3 +18,6 @@ export const analyzeBulk = (file) => {
 };
 export const downloadReport = (results) =>
   API.post("/report", results, { responseType: "blob" });
+
+export const analyzeAccountHistory = (accountId, transactions) =>
+  API.post("/analyze/account", { account_id: accountId, transactions });

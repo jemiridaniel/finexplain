@@ -16,6 +16,11 @@ FEATURE_LABELS = {
     "balance_delta_orig": "Sender Balance Change",
     "balance_delta_dest": "Recipient Balance Change",
     "amount_to_orig_ratio": "Amount-to-Balance Ratio",
+    "orig_drained": "Account Fully Drained",
+    "dest_no_increase": "Recipient Balance Unchanged",
+    "amount_equals_balance": "Entire Balance Moved",
+    "orig_balance_error": "Sender Balance Discrepancy",
+    "dest_balance_error": "Recipient Balance Discrepancy",
 }
 
 

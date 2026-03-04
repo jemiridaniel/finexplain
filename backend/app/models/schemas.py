@@ -48,3 +48,30 @@ class BulkAnalysisResult(BaseModel):
     total: int
     flagged: int
     results: List[AnalysisResult]
+
+
+# --- Account History Analysis ---
+
+class AccountHistoryRequest(BaseModel):
+    account_id: str = "C_account_001"
+    transactions: List[TransactionInput]
+
+
+class AccountTransactionResult(AnalysisResult):
+    behavioral_risk: float = 0.0
+    behavioral_flags: List[str] = []
+    behavioral_anomaly: bool = False
+
+
+class AccountAnalysisResult(BaseModel):
+    account_id: str
+    total_transactions: int
+    period_days: int
+    flagged_count: int
+    mean_amount: float
+    std_amount: float
+    max_amount: float
+    common_types: List[str]
+    avg_daily_transactions: float
+    narrative: str
+    results: List[AccountTransactionResult]

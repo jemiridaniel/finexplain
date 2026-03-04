@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
 from app.core.config import settings
-from app.api import transactions, health
+from app.api import transactions, health, account
 
 app = FastAPI(
     title="FinExplain API",
@@ -22,6 +22,7 @@ app.add_middleware(
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(transactions.router, prefix="/api/v1", tags=["Transactions"])
+app.include_router(account.router, prefix="/api/v1", tags=["Account History"])
 
 # Serve React build — must come AFTER API routes
 react_build = Path("/app/frontend/build")

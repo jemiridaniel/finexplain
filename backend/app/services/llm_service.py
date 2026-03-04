@@ -118,6 +118,44 @@ class LLMService:
         )
         return response.choices[0].message.content.strip()
 
+    async def explain_account(
+        self,
+        account_id: str,
+        profile: dict,
+        anomalies: list,
+    ) -> str:
+        if not anomalies:
+            return (
+                f"Account {account_id} shows no suspicious activity over the 14-day analysis period. "
+                f"All {profile['total']} transactions are consistent with the account's normal behavior "
+                f"(average transaction: ${profile['mean_amount']:,.2f})."
+            )
+
+        prompt = f"""You are a financial fraud analyst. Write a 3-4 sentence risk summary for account {account_id}.
+
+Account behavior over 14 days:
+- Total transactions analyzed: {profile['total']}
+- Average transaction amount: ${profile['mean_amount']:,.2f}
+- Largest transaction: ${profile['max_amount']:,.2f}
+- Typical transaction types: {', '.join(profile['common_types'][:3])}
+- Flagged as suspicious: {len(anomalies)} transaction(s)
+
+Write a plain-English risk assessment. Be specific about what patterns are concerning and what action should be taken. Do not use jargon."""
+
+        for name, fn in [("Groq", self._call_groq), ("Claude", self._call_claude), ("OpenAI", self._call_openai)]:
+            try:
+                return await fn(prompt)
+            except Exception:
+                continue
+
+        top = anomalies[0] if anomalies else None
+        concern = f"including a {top.transaction.type} of ${top.transaction.amount:,.2f}" if top else ""
+        return (
+            f"Account {account_id} had {len(anomalies)} suspicious transaction(s) flagged out of {profile['total']} analyzed {concern}. "
+            f"The account's typical transaction is ${profile['mean_amount']:,.2f}, making these outliers statistically significant. "
+            f"Manual review and possible account freeze are recommended pending investigation."
+        )
+
     def _rule_based_fallback(
         self,
         transaction: TransactionInput,
